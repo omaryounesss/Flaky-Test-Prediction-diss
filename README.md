@@ -141,4 +141,4 @@ Raw data files are not committed; `make data` fetches them (~23 MB).
 
 ## License
 
-[MIT](LICENSE) — © 2026 Omar Ayounis.
+[MIT](LICENSE) — © 2026 Omar Younes.
