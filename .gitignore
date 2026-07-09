@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+data/raw/
+models/*.joblib
+.DS_Store
+
+# local-only: dissertation draft and planning notes are not part of the
+# public artifact
+dissertation/
+planning/
+docs/results-summary.md
+.claude/

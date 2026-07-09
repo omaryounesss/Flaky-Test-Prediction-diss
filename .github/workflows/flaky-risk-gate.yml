@@ -1,0 +1,27 @@
+# Flaky-risk gate: score JUnit tests touched by a PR and post a risk report.
+# This is the "product wrapper" around the research model — teams see risky
+# tests before they merge, not after they start flaking in CI.
+name: flaky-risk-gate
+
+on:
+  pull_request:
+    paths:
+      - "**/*Test*.java"
+      - "**/*Tests.java"
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install flakeguard
+        run: pip install "flakeguard @ git+https://github.com/${{ github.repository }}"
+
+      - name: Score tests
+        run: |
+          flakeguard scan . --format markdown --top 15 >> "$GITHUB_STEP_SUMMARY"

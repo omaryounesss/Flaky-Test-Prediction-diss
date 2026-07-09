@@ -1,0 +1,7 @@
+model_a,model_b,median_f1_a,median_f1_b,wilcoxon_stat,p_value,n_projects
+logreg,random_forest,0.0673,0.0,27.0,0.0036,24
+logreg,vocab_xgboost,0.0673,0.0,75.0,0.2627,24
+logreg,xgboost,0.0673,0.0061,50.0,0.04,24
+random_forest,vocab_xgboost,0.0,0.0,19.0,0.064,24
+random_forest,xgboost,0.0,0.0061,3.0,0.0047,24
+vocab_xgboost,xgboost,0.0,0.0061,48.0,0.4955,24
