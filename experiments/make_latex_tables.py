@@ -52,12 +52,26 @@ def significance_table() -> None:
     (TABLES / "significance.tex").write_text(df.to_latex(index=False, escape=False))
 
 
+def lopo_detail_table() -> None:
+    df = pd.read_csv(RESULTS / "lopo_per_project_detail.csv", index_col=0)
+    keep = ["n", "n_flaky", "flaky_rate",
+            "logreg_precision", "logreg_recall", "logreg_f1"]
+    df = df[[c for c in keep if c in df.columns]]
+    df.columns = ["Tests", "Flaky", "Rate", "Prec.", "Rec.", "F1"]
+    df["Rate"] = df["Rate"].map(lambda r: f"{r:.1%}".replace("%", "\\%"))
+    df.index = df.index.map(tex_escape)
+    df.index.name = "Held-out project"
+    (TABLES / "lopo_per_project_detail.tex").write_text(df.to_latex(escape=False))
+
+
 def main() -> None:
     TABLES.mkdir(exist_ok=True)
+    mean_std_table("mixed_project_summary.csv", "mixed_project_summary.tex")
     mean_std_table("within_project_summary.csv", "within_project_summary.tex")
     mean_std_table("cross_project_summary.csv", "cross_project_summary.tex")
     dataset_table()
     significance_table()
+    lopo_detail_table()
     print(f"wrote {len(list(TABLES.glob('*.tex')))} tables to {TABLES}")
 
 

@@ -4,11 +4,14 @@ Usage: python experiments/run_experiments.py [--skip-vocab]
 
 Produces:
   results/dataset_summary.csv          per-project counts (write-up Table 1)
-  results/within_project_folds.csv     per-fold metrics, all models
+  results/mixed_project_folds.csv      pooled stratified CV, per-fold metrics
+  results/mixed_project_summary.csv    mean±std per model
+  results/within_project_folds.csv     true per-project CV, per (project, fold)
   results/within_project_summary.csv   mean±std per model
-  results/cross_project_folds.csv      per-held-out-project metrics
+  results/cross_project_folds.csv      leave-one-project-out, per held-out project
   results/cross_project_summary.csv    mean±std per model
-  results/ablations.csv                feature-family ablations (both protocols)
+  results/lopo_per_project_detail.csv  per-project class distribution + PR metrics
+  results/ablations.csv                feature-family ablations
   results/significance.csv             Wilcoxon signed-rank model comparisons
   results/figures/*.png                figures for the write-up
 """
@@ -43,13 +46,14 @@ from flakeguard.data import (  # noqa: E402
 )
 from flakeguard.evaluation import (  # noqa: E402
     leave_one_project_out,
+    mixed_project_cv,
     summarize,
     within_project_cv,
 )
 from flakeguard.modeling import MODEL_NAMES  # noqa: E402
 from flakeguard.vocab import (  # noqa: E402
     vocab_leave_one_project_out,
-    vocab_within_project_cv,
+    vocab_mixed_project_cv,
 )
 
 RESULTS = ROOT / "results"
@@ -61,8 +65,10 @@ def log(msg: str) -> None:
 
 
 def run_models(ds, skip_vocab: bool):
-    within, cross = [], []
+    mixed, within, cross = [], [], []
     for name in MODEL_NAMES:
+        log(f"mixed-project CV: {name}")
+        mixed.append(mixed_project_cv(ds, name))
         log(f"within-project CV: {name}")
         within.append(within_project_cv(ds, name))
         log(f"cross-project LOPO: {name}")
@@ -70,11 +76,26 @@ def run_models(ds, skip_vocab: bool):
     if not skip_vocab:
         vocab = load_vocabulary()
         log(f"vocabulary baseline: {len(vocab)} tests matched")
-        log("within-project CV: vocab_xgboost")
-        within.append(vocab_within_project_cv(vocab))
+        log("mixed-project CV: vocab_xgboost")
+        mixed.append(vocab_mixed_project_cv(vocab))
         log("cross-project LOPO: vocab_xgboost")
         cross.append(vocab_leave_one_project_out(vocab))
-    return pd.concat(within, ignore_index=True), pd.concat(cross, ignore_index=True)
+    return (pd.concat(mixed, ignore_index=True),
+            pd.concat(within, ignore_index=True),
+            pd.concat(cross, ignore_index=True))
+
+
+def lopo_detail(cross: pd.DataFrame) -> pd.DataFrame:
+    """Per held-out project: class distribution + precision/recall/F1 per model.
+
+    F1 and ROC-AUC paint different pictures when flaky tests are rare, so the
+    write-up reports this table alongside the aggregates."""
+    base = (cross.groupby("project")[["n", "n_flaky", "flaky_rate"]].first()
+            .round({"flaky_rate": 4}))
+    pivot = cross.pivot_table(index="project", columns="model",
+                              values=["precision", "recall", "f1"]).round(3)
+    pivot.columns = [f"{model}_{metric}" for metric, model in pivot.columns]
+    return base.join(pivot).sort_values("flaky_rate", ascending=False)
 
 
 def run_ablations(ds) -> pd.DataFrame:
@@ -90,8 +111,8 @@ def run_ablations(ds) -> pd.DataFrame:
     rows = []
     for variant, features in variants.items():
         log(f"ablation: {variant} ({len(features)} features)")
-        w = within_project_cv(ds, "xgboost", features=features)
-        w["protocol"], w["variant"] = "within_project", variant
+        w = mixed_project_cv(ds, "xgboost", features=features)
+        w["protocol"], w["variant"] = "mixed_project", variant
         c = leave_one_project_out(ds, "xgboost", features=features)
         c["protocol"], c["variant"] = "cross_project", variant
         rows += [w, c]
@@ -114,16 +135,19 @@ def significance_tests(cross: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).round(4)
 
 
-def make_figures(within: pd.DataFrame, cross: pd.DataFrame, ablations: pd.DataFrame):
+def make_figures(mixed: pd.DataFrame, within: pd.DataFrame, cross: pd.DataFrame,
+                 ablations: pd.DataFrame):
     sns.set_theme(style="whitegrid")
 
-    # Fig 1: within vs cross F1 by model — the generalization-gap headline
-    w = within.groupby("model")["f1"].mean().rename("within-project")
-    c = cross.groupby("model")["f1"].mean().rename("cross-project")
-    both = pd.concat([w, c], axis=1).drop(index="majority", errors="ignore")
-    ax = both.plot.bar(rot=20, figsize=(8, 4.5), color=["#4c72b0", "#dd8452"])
+    # Fig 1: F1 by protocol and model — the generalization-gap headline
+    m = mixed.groupby("model")["f1"].mean().rename("mixed-project (pooled CV)")
+    w = within.groupby("model")["f1"].mean().rename("within-project (per-project CV)")
+    c = cross.groupby("model")["f1"].mean().rename("cross-project (LOPO)")
+    all_three = pd.concat([m, w, c], axis=1).drop(index="majority", errors="ignore")
+    ax = all_three.plot.bar(rot=20, figsize=(8.5, 4.5),
+                            color=["#4c72b0", "#55a868", "#dd8452"])
     ax.set_ylabel("Mean F1")
-    ax.set_title("Within-project vs cross-project F1 (the generalization gap)")
+    ax.set_title("F1 by evaluation protocol (the generalization gap)")
     plt.tight_layout()
     plt.savefig(FIGURES / "generalization_gap.png", dpi=200)
     plt.close()
@@ -162,20 +186,25 @@ def main() -> None:
     log(f"dataset: {len(ds.frame)} tests, {int(ds.y.sum())} flaky, "
         f"{ds.projects.nunique()} projects")
 
-    within, cross = run_models(ds, skip_vocab=args.skip_vocab)
+    mixed, within, cross = run_models(ds, skip_vocab=args.skip_vocab)
+    mixed.to_csv(RESULTS / "mixed_project_folds.csv", index=False)
     within.to_csv(RESULTS / "within_project_folds.csv", index=False)
     cross.to_csv(RESULTS / "cross_project_folds.csv", index=False)
+    summarize(mixed).to_csv(RESULTS / "mixed_project_summary.csv")
     summarize(within).to_csv(RESULTS / "within_project_summary.csv")
     summarize(cross).to_csv(RESULTS / "cross_project_summary.csv")
+    lopo_detail(cross).to_csv(RESULTS / "lopo_per_project_detail.csv")
 
     ablations = run_ablations(ds)
     ablations.to_csv(RESULTS / "ablations.csv", index=False)
 
     significance_tests(cross).to_csv(RESULTS / "significance.csv", index=False)
-    make_figures(within, cross, ablations)
+    make_figures(mixed, within, cross, ablations)
 
     log("done — see results/")
-    print("\n=== WITHIN-PROJECT (5-fold stratified CV) ===")
+    print("\n=== MIXED-PROJECT (pooled 5-fold stratified CV) ===")
+    print(summarize(mixed).to_string())
+    print("\n=== WITHIN-PROJECT (per-project 5-fold CV) ===")
     print(summarize(within).to_string())
     print("\n=== CROSS-PROJECT (leave-one-project-out) ===")
     print(summarize(cross).to_string())

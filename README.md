@@ -22,24 +22,29 @@ Evaluated on the [FlakeFlagger dataset](https://github.com/AlshammariA/FlakeFlag
 (22,236 JUnit tests from 24 open-source Java projects, 811 flaky, labelled by
 10,000 reruns per test):
 
-| | Within-project (5-fold CV) | Cross-project (leave-one-project-out) |
-|---|---|---|
-| Best F1 | **0.73** (random forest) | **0.13** (logistic regression) |
-| Best ROC-AUC | 0.97 | 0.71 |
-| Precision@50 | 0.96–0.99 | ≤ 0.17 |
+Three evaluation protocols, in decreasing order of information shared
+between training and test sets:
 
-![Within-project vs cross-project F1](results/figures/generalization_gap.png)
+| | Mixed-project (pooled 5-fold CV) | Within-project (per-project CV) | Cross-project (leave-one-project-out) |
+|---|---|---|---|
+| Best F1 | **0.73** (random forest) | **0.61** (random forest) | **0.13** (logistic regression) |
+| Best ROC-AUC | 0.97 | 0.93 | 0.71 |
+
+![F1 by evaluation protocol](results/figures/generalization_gap.png)
 
 Three findings:
 
-1. **Within a known project, prediction works.** F1 0.73, and 96–99% of the
-   fifty highest-ranked tests are genuinely flaky — a near-pure triage list.
+1. **Where the model knows the project, prediction works.** F1 0.73 pooled /
+   0.61 per-project, and 96–99% of the fifty highest-ranked tests are
+   genuinely flaky — a near-pure triage list. (Note: most prior work reports
+   the pooled protocol as "within-project"; the pooling alone is worth
+   ~0.12 F1.)
 2. **On unseen projects, it collapses** — and the collapse is structured:
    logistic regression significantly beats random forest across held-out
    projects (Wilcoxon p = 0.004). High-capacity models memorize
    project-specific signal that does not transfer.
 3. **The strongest features are the least portable.** Ablations show dynamic
-   features (execution time, coverage) drive within-project accuracy but
+   features (execution time, coverage) drive know-the-project accuracy but
    *hurt* cross-project transfer — they fingerprint the project, not the flakiness.
 
 Full per-fold and per-project numbers, ablations, and significance tests are
@@ -123,9 +128,10 @@ examples/             sample Java test file (make demo)
 - **Models:** majority-class floor, logistic regression, random forest,
   XGBoost; all class-weighted for the 3.6% positive rate. Accuracy is never
   reported (a constant classifier scores 96.4%).
-- **Protocols:** stratified 5-fold CV (the literature's default) *and*
-  leave-one-project-out (the deployment scenario), with per-project variance
-  and paired Wilcoxon significance tests.
+- **Protocols:** pooled stratified 5-fold CV (mixed-project — the
+  literature's default), per-project 5-fold CV (true within-project), and
+  leave-one-project-out (the deployment scenario), with per-project class
+  distributions, variance, and paired Wilcoxon significance tests.
 - **Explainability:** TreeSHAP global importance plus per-test top-3 risk
   reasons mapped to a root-cause vocabulary.
 

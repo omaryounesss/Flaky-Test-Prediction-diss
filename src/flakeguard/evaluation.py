@@ -1,8 +1,15 @@
-"""Evaluation protocols: within-project stratified CV and leave-one-project-out.
+"""Evaluation protocols, in decreasing order of information shared between
+training and test sets:
+
+- mixed-project: pooled stratified k-fold CV; train and test folds share
+  projects (what most prior work reports as "within-project").
+- within-project: stratified k-fold CV run inside each single project.
+- cross-project (leave-one-project-out): every project held out in turn;
+  the deployment scenario.
 
 Accuracy is deliberately not a headline metric: with a 3.6% positive rate a
 useless model scores 96% accuracy. We report precision, recall, F1, ROC-AUC,
-average precision, and precision@k.
+average precision, and precision@k, plus each fold's class distribution.
 """
 
 from __future__ import annotations
@@ -39,6 +46,7 @@ def compute_metrics(y_true, y_pred, y_score) -> dict[str, float]:
         "p_at_50": precision_at_k(y_true, y_score, 50),
         "n": len(y_true),
         "n_flaky": int(np.sum(y_true)),
+        "flaky_rate": float(np.mean(y_true)),
     }
     # AUC metrics are undefined when a fold has a single class
     if len(np.unique(y_true)) > 1:
@@ -61,10 +69,15 @@ def _fit_predict(model_name: str, X_train, y_train, X_test):
     return model.predict(X_test), score
 
 
-def within_project_cv(
+def mixed_project_cv(
     ds: Dataset, model_name: str, features: list[str] | None = None, n_splits: int = 5
 ) -> pd.DataFrame:
-    """Pooled stratified k-fold CV: train and test folds share projects."""
+    """Pooled stratified k-fold CV: train and test folds share projects.
+
+    Most prior work reports this protocol under the name "within-project";
+    the pooled folds let a model exploit cross-test regularities of every
+    project it will be tested on.
+    """
     features = features or ds.feature_names
     X, y = ds.frame[features].values, ds.y.values
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
@@ -73,6 +86,32 @@ def within_project_cv(
         y_pred, y_score = _fit_predict(model_name, X[tr], y[tr], X[te])
         rows.append({"model": model_name, "fold": fold,
                      **compute_metrics(y[te], y_pred, y_score)})
+    return pd.DataFrame(rows)
+
+
+def within_project_cv(
+    ds: Dataset, model_name: str, features: list[str] | None = None,
+    n_splits: int = 5, min_flaky: int = 10,
+) -> pd.DataFrame:
+    """True within-project protocol: stratified k-fold CV inside each project.
+
+    Only projects with at least min_flaky flaky tests participate — below
+    that, per-fold positive counts are too small for stable metrics. One row
+    per (project, fold).
+    """
+    features = features or ds.feature_names
+    rows = []
+    for project, group in ds.frame.groupby(ds.projects):
+        y = group["flaky"].values
+        if y.sum() < min_flaky or (len(y) - y.sum()) < n_splits:
+            continue
+        X = group[features].values
+        skf = StratifiedKFold(n_splits=n_splits, shuffle=True,
+                              random_state=RANDOM_STATE)
+        for fold, (tr, te) in enumerate(skf.split(X, y)):
+            y_pred, y_score = _fit_predict(model_name, X[tr], y[tr], X[te])
+            rows.append({"model": model_name, "project": project, "fold": fold,
+                         **compute_metrics(y[te], y_pred, y_score)})
     return pd.DataFrame(rows)
 
 

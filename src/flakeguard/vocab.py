@@ -37,7 +37,7 @@ def _fit_predict(model_name, texts_train, y_train, texts_test):
     return model.predict(X_test), model.predict_proba(X_test)[:, 1]
 
 
-def vocab_within_project_cv(
+def vocab_mixed_project_cv(
     frame: pd.DataFrame, model_name: str = "xgboost", n_splits: int = 5
 ) -> pd.DataFrame:
     texts, y = frame["tokenList"].values, frame["flaky"].values

@@ -13,6 +13,7 @@ from flakeguard.data import ALL_FEATURES, LABEL, PROJECT, Dataset
 from flakeguard.evaluation import (
     compute_metrics,
     leave_one_project_out,
+    mixed_project_cv,
     precision_at_k,
     within_project_cv,
 )
@@ -42,10 +43,17 @@ def test_metrics_handle_single_class_fold():
     assert m["precision"] == 0.0
 
 
-def test_within_project_cv_learns_synthetic_signal(synthetic_dataset):
-    res = within_project_cv(synthetic_dataset, "random_forest", n_splits=3)
+def test_mixed_project_cv_learns_synthetic_signal(synthetic_dataset):
+    res = mixed_project_cv(synthetic_dataset, "random_forest", n_splits=3)
     assert len(res) == 3
     assert res["f1"].mean() > 0.8
+
+
+def test_within_project_cv_runs_per_project(synthetic_dataset):
+    res = within_project_cv(synthetic_dataset, "logreg", n_splits=3, min_flaky=5)
+    assert set(res["project"]) <= {"a", "b", "c"}
+    assert not res.empty
+    assert "flaky_rate" in res.columns
 
 
 def test_lopo_produces_one_row_per_project(synthetic_dataset):
