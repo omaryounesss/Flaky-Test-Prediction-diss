@@ -59,6 +59,8 @@ def lopo_detail_table() -> None:
     df = df[[c for c in keep if c in df.columns]]
     df.columns = ["Tests", "Flaky", "Rate", "Prec.", "Rec.", "F1"]
     df["Rate"] = df["Rate"].map(lambda r: f"{r:.1%}".replace("%", "\\%"))
+    for col in ("Prec.", "Rec.", "F1"):
+        df[col] = df[col].map("{:.2f}".format)
     df.index = df.index.map(tex_escape)
     df.index.name = "Held-out project"
     (TABLES / "lopo_per_project_detail.tex").write_text(df.to_latex(escape=False))
