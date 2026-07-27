@@ -1,0 +1,5 @@
+model,mean,median,std,n_projects
+logreg,0.462,0.504,0.317,14
+majority,0.055,0.0,0.205,14
+random_forest,0.61,0.692,0.302,14
+xgboost,0.596,0.608,0.291,14

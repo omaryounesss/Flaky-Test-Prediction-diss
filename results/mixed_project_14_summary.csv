@@ -1,0 +1,5 @@
+model,precision_mean,precision_std,recall_mean,recall_std,f1_mean,f1_std,roc_auc_mean,roc_auc_std,avg_precision_mean,avg_precision_std,p_at_50_mean,p_at_50_std
+logreg,0.168,0.009,0.587,0.039,0.261,0.014,0.776,0.031,0.288,0.032,0.54,0.094
+majority,0.0,0.0,0.0,0.0,0.0,0.0,0.5,0.0,0.063,0.0,0.028,0.023
+random_forest,0.785,0.018,0.733,0.061,0.758,0.038,0.961,0.007,0.809,0.045,0.972,0.039
+xgboost,0.691,0.012,0.751,0.068,0.719,0.036,0.956,0.013,0.803,0.042,0.992,0.011

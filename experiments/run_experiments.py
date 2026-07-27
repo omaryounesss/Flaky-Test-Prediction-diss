@@ -85,6 +85,74 @@ def run_models(ds, skip_vocab: bool):
             pd.concat(cross, ignore_index=True))
 
 
+def within_by_project(within: pd.DataFrame) -> pd.DataFrame:
+    """One CV score per (model, project) first, then stats across projects.
+
+    Separates project-level from fold-level variation (averaging all
+    project-folds together conflates the two)."""
+    per_project = (within.groupby(["model", "project"])
+                   [["precision", "recall", "f1", "roc_auc"]].mean().reset_index())
+    stats = (per_project.groupby("model")["f1"]
+             .agg(["mean", "median", "std", "count"]).round(3)
+             .rename(columns={"count": "n_projects"}))
+    return per_project.round(3), stats
+
+
+def mixed_on_within_projects(ds, projects: list[str]) -> pd.DataFrame:
+    """Pooled CV restricted to the same projects the within-project protocol
+    uses, so the pooling effect is measured on identical data."""
+    from flakeguard.data import Dataset
+
+    frame = ds.frame[ds.frame["project"].isin(projects)].reset_index(drop=True)
+    sub = Dataset(frame=frame, feature_names=ds.feature_names)
+    rows = []
+    for name in MODEL_NAMES:
+        log(f"mixed-project CV on within-protocol projects: {name}")
+        r = mixed_project_cv(sub, name)
+        rows.append(r)
+    return pd.concat(rows, ignore_index=True)
+
+
+def transfer_correlation(cross: pd.DataFrame) -> pd.DataFrame:
+    """Spearman correlation between held-out project flaky rate and LOPO F1,
+    per model — does base rate explain transferability?"""
+    from scipy.stats import spearmanr
+
+    rows = []
+    for model, grp in cross.groupby("model"):
+        if model == "majority":
+            continue
+        rho, p = spearmanr(grp["flaky_rate"], grp["f1"])
+        rows.append({"model": model, "spearman_rho": round(rho, 3),
+                     "p_value": round(p, 4), "n_projects": len(grp)})
+    return pd.DataFrame(rows)
+
+
+def fingerprint_per_project(ablations: pd.DataFrame) -> pd.DataFrame:
+    """Per-held-out-project comparison of all-features vs static-only under
+    LOPO, with a paired Wilcoxon test — evidence (not proof) for the
+    fingerprinting hypothesis."""
+    from scipy.stats import wilcoxon
+
+    lopo = ablations[(ablations["protocol"] == "cross_project")
+                     & (ablations["variant"].isin(["all", "static_only"]))]
+    pivot = lopo.pivot_table(index="project", columns="variant", values="f1")
+    pivot["delta_static_minus_all"] = pivot["static_only"] - pivot["all"]
+    diffs = pivot["delta_static_minus_all"]
+    if diffs.abs().sum() > 0:
+        stat, p = wilcoxon(pivot["static_only"], pivot["all"])
+    else:
+        stat, p = float("nan"), 1.0
+    summary = pd.DataFrame([{
+        "projects_where_static_better": int((diffs > 0).sum()),
+        "projects_where_all_better": int((diffs < 0).sum()),
+        "projects_tied": int((diffs == 0).sum()),
+        "median_delta": round(diffs.median(), 4),
+        "wilcoxon_stat": stat, "p_value": round(p, 4),
+    }])
+    return pivot.round(3), summary
+
+
 def lopo_detail(cross: pd.DataFrame) -> pd.DataFrame:
     """Per held-out project: class distribution + precision/recall/F1 per model.
 
@@ -195,8 +263,35 @@ def main() -> None:
     summarize(cross).to_csv(RESULTS / "cross_project_summary.csv")
     lopo_detail(cross).to_csv(RESULTS / "lopo_per_project_detail.csv")
 
+    # per-project-first aggregation for the within-project protocol
+    per_project, stats = within_by_project(within)
+    per_project.to_csv(RESULTS / "within_project_by_project.csv", index=False)
+    stats.to_csv(RESULTS / "within_project_stats.csv")
+    print("\n=== WITHIN-PROJECT, one score per project first ===")
+    print(stats.to_string())
+
+    # pooled CV restricted to the same 14 projects (clean pooling-effect estimate)
+    within_projects = sorted(within["project"].unique())
+    mixed14 = mixed_on_within_projects(ds, within_projects)
+    mixed14.to_csv(RESULTS / "mixed_project_14_folds.csv", index=False)
+    summarize(mixed14).to_csv(RESULTS / "mixed_project_14_summary.csv")
+    print("\n=== MIXED-PROJECT restricted to the 14 within-protocol projects ===")
+    print(summarize(mixed14).to_string())
+
+    # does base rate explain transfer?
+    corr = transfer_correlation(cross)
+    corr.to_csv(RESULTS / "transfer_correlation.csv", index=False)
+    print("\n=== Spearman: held-out flaky rate vs LOPO F1 ===")
+    print(corr.to_string(index=False))
+
     ablations = run_ablations(ds)
     ablations.to_csv(RESULTS / "ablations.csv", index=False)
+
+    fp_pivot, fp_summary = fingerprint_per_project(ablations)
+    fp_pivot.to_csv(RESULTS / "fingerprint_per_project.csv")
+    fp_summary.to_csv(RESULTS / "fingerprint_summary.csv", index=False)
+    print("\n=== Fingerprinting: static-only vs all features, per held-out project ===")
+    print(fp_summary.to_string(index=False))
 
     significance_tests(cross).to_csv(RESULTS / "significance.csv", index=False)
     make_figures(mixed, within, cross, ablations)

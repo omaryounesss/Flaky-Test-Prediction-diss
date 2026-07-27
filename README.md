@@ -44,8 +44,10 @@ Three findings:
    projects (Wilcoxon p = 0.004). High-capacity models memorize
    project-specific signal that does not transfer.
 3. **The strongest features are the least portable.** Ablations show dynamic
-   features (execution time, coverage) drive know-the-project accuracy but
-   *hurt* cross-project transfer — they fingerprint the project, not the flakiness.
+   features (execution time, coverage) drive know-the-project accuracy, while
+   removing them *improves* mean cross-project transfer (better in 13 of 24
+   held-out projects; suggestive rather than significant) — evidence that
+   they fingerprint the project rather than the flakiness.
 
 Full per-fold and per-project numbers, ablations, and significance tests are
 in [`results/`](results/); every number regenerates from one command.

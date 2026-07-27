@@ -1,0 +1,5 @@
+model,spearman_rho,p_value,n_projects
+logreg,0.847,0.0,24
+random_forest,0.338,0.1058,24
+vocab_xgboost,0.723,0.0001,24
+xgboost,0.536,0.007,24
