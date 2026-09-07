@@ -27,8 +27,12 @@ between training and test sets:
 
 | | Mixed-project (pooled 5-fold CV) | Within-project (per-project CV) | Cross-project (leave-one-project-out) |
 |---|---|---|---|
-| Best F1 | **0.73** (random forest) | **0.61** (random forest) | **0.13** (logistic regression) |
+| Best F1 | **0.73** (random forest) | **0.61** mean / 0.69 median (random forest) | **0.13** (logistic regression) |
 | Best ROC-AUC | 0.97 | 0.93 | 0.71 |
+
+Restricted to the same 14 projects the within-project protocol uses, the
+pooled protocol reaches 0.76 — so pooling alone is worth ≈0.15 F1 over
+evaluating a repository on its own history.
 
 ![F1 by evaluation protocol](results/figures/generalization_gap.png)
 
