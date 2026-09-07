@@ -12,6 +12,13 @@ from xgboost import XGBClassifier
 RANDOM_STATE = 42
 
 
+def pos_weight(y) -> float:
+    """n_negative / n_positive of y, for XGBoost's scale_pos_weight (sklearn's
+    class_weight='balanced' is equivalent per-fold for the other models)."""
+    pos = max(int(y.sum()), 1)
+    return (len(y) - pos) / pos
+
+
 def make_model(name: str, pos_weight: float = 1.0):
     """Build a fresh, unfitted classifier by name.
 

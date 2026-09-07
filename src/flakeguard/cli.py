@@ -18,6 +18,8 @@ import re
 import sys
 from pathlib import Path
 
+from .extract import RISKY_APIS
+
 JAVA_KEYWORDS = frozenset(
     """abstract assert boolean break byte case catch char class const continue
     default do double else enum extends final finally float for goto if
@@ -54,33 +56,27 @@ def tokenize_java(body: str) -> str:
 
 def cmd_train(args: argparse.Namespace) -> int:
     import joblib
-    from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.pipeline import Pipeline
 
     from .data import load_vocabulary
-    from .modeling import make_model
+    from .modeling import make_model, pos_weight
+    from .vocab import _vectorizer
 
     frame = load_vocabulary()
     y = frame["flaky"].values
-    pos = max(int(y.sum()), 1)
     model = Pipeline([
-        ("tfidf", TfidfVectorizer(
-            tokenizer=split_token_list,
-            preprocessor=None, lowercase=True, max_features=2000,
-            token_pattern=None)),
-        ("clf", make_model("xgboost", pos_weight=(len(y) - pos) / pos)),
+        ("tfidf", _vectorizer()),
+        ("clf", make_model("xgboost", pos_weight=pos_weight(y))),
     ])
     model.fit(frame["tokenList"].values, y)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out)
-    print(f"trained on {len(frame)} tests ({pos} flaky) -> {out}")
+    print(f"trained on {len(frame)} tests ({int(y.sum())} flaky) -> {out}")
     return 0
 
 
 def _heuristic_score(features: dict[str, float]) -> float:
-    from .extract import RISKY_APIS
-
     hits = sum(features.get(k, 0.0) for k in RISKY_APIS)
     return hits / len(RISKY_APIS)
 

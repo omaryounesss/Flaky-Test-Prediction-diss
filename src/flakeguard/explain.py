@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .data import HINDEX_WINDOWS
+
 # Plain-English descriptions of what a high value of each feature means,
 # used to turn SHAP attributions into remediation hints.
 FEATURE_MEANING = {
@@ -24,7 +26,7 @@ FEATURE_MEANING = {
     "projectSourceClassesCovered": "touches many project classes",
     "num_third_party_libs": "exercises many third-party libraries",
 }
-for _w in (5, 10, 25, 50, 75, 100, 500, 10000):
+for _w in HINDEX_WINDOWS:
     FEATURE_MEANING[f"hIndexModificationsPerCoveredLine_window{_w}"] = (
         f"covered code was modified frequently in the last {_w} commits"
     )

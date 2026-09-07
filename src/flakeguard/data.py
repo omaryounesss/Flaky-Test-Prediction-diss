@@ -36,19 +36,14 @@ SMELL_FEATURES = [
 
 SIZE_FEATURES = ["testLength", "numAsserts"]
 
+HINDEX_WINDOWS = (5, 10, 25, 50, 75, 100, 500, 10000)
+
 DYNAMIC_FEATURES = [
     "numCoveredLines",
     "ExecutionTime",
     "projectSourceLinesCovered",
     "projectSourceClassesCovered",
-    "hIndexModificationsPerCoveredLine_window5",
-    "hIndexModificationsPerCoveredLine_window10",
-    "hIndexModificationsPerCoveredLine_window25",
-    "hIndexModificationsPerCoveredLine_window50",
-    "hIndexModificationsPerCoveredLine_window75",
-    "hIndexModificationsPerCoveredLine_window100",
-    "hIndexModificationsPerCoveredLine_window500",
-    "hIndexModificationsPerCoveredLine_window10000",
+    *(f"hIndexModificationsPerCoveredLine_window{w}" for w in HINDEX_WINDOWS),
     "num_third_party_libs",
 ]
 

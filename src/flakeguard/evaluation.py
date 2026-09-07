@@ -26,9 +26,8 @@ from sklearn.metrics import (
 from sklearn.model_selection import StratifiedKFold
 
 from .data import Dataset
-from .modeling import make_model
-
-RANDOM_STATE = 42
+from .modeling import RANDOM_STATE, make_model
+from .modeling import pos_weight as _pos_weight
 
 
 def precision_at_k(y_true: np.ndarray, y_score: np.ndarray, k: int) -> float:
@@ -59,8 +58,7 @@ def compute_metrics(y_true, y_pred, y_score) -> dict[str, float]:
 
 
 def _fit_predict(model_name: str, X_train, y_train, X_test):
-    pos = max(int(y_train.sum()), 1)
-    model = make_model(model_name, pos_weight=(len(y_train) - pos) / pos)
+    model = make_model(model_name, pos_weight=_pos_weight(y_train))
     model.fit(X_train, y_train)
     if hasattr(model, "predict_proba"):
         score = model.predict_proba(X_test)[:, 1]

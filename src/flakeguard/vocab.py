@@ -12,14 +12,16 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import StratifiedKFold
 
+from .cli import split_token_list
 from .evaluation import RANDOM_STATE, compute_metrics
 from .modeling import make_model
+from .modeling import pos_weight as _pos_weight
 
 
 def _vectorizer() -> TfidfVectorizer:
     # tokenList is comma-separated; tests are short so cap the vocabulary
     return TfidfVectorizer(
-        tokenizer=lambda s: [t for t in s.split(",") if t],
+        tokenizer=split_token_list,
         preprocessor=None,
         lowercase=True,
         max_features=2000,
@@ -31,8 +33,7 @@ def _fit_predict(model_name, texts_train, y_train, texts_test):
     vec = _vectorizer()
     X_train = vec.fit_transform(texts_train)
     X_test = vec.transform(texts_test)
-    pos = max(int(y_train.sum()), 1)
-    model = make_model(model_name, pos_weight=(len(y_train) - pos) / pos)
+    model = make_model(model_name, pos_weight=_pos_weight(y_train))
     model.fit(X_train, y_train)
     return model.predict(X_test), model.predict_proba(X_test)[:, 1]
 

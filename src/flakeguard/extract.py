@@ -17,24 +17,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # Risky-API patterns: each match is both a model feature and a user-facing reason.
-RISKY_APIS: dict[str, tuple[str, str]] = {
-    "uses_sleep": (r"Thread\.sleep|TimeUnit\.\w+\.sleep|await\(\)",
+RISKY_APIS: dict[str, tuple[re.Pattern[str], str]] = {
+    "uses_sleep": (re.compile(r"Thread\.sleep|TimeUnit\.\w+\.sleep|await\(\)"),
                    "waits on wall-clock time (Thread.sleep / await)"),
-    "uses_threads": (r"new Thread|ExecutorService|CompletableFuture|Runnable|@Async|parallelStream",
+    "uses_threads": (re.compile(r"new Thread|ExecutorService|CompletableFuture|Runnable|@Async|parallelStream"),
                      "starts or coordinates concurrent work"),
-    "uses_network": (r"HttpURLConnection|Socket\(|HttpClient|RestTemplate|WebClient|okhttp|localhost|127\.0\.0\.1|URL\(",
+    "uses_network": (re.compile(r"HttpURLConnection|Socket\(|HttpClient|RestTemplate|WebClient|okhttp|localhost|127\.0\.0\.1|URL\("),
                      "talks to the network"),
-    "uses_filesystem": (r"new File\(|Files\.|FileReader|FileWriter|FileInputStream|FileOutputStream|createTempFile|Paths\.get",
+    "uses_filesystem": (re.compile(r"new File\(|Files\.|FileReader|FileWriter|FileInputStream|FileOutputStream|createTempFile|Paths\.get"),
                         "reads or writes the filesystem"),
-    "uses_random": (r"new Random|Math\.random|UUID\.randomUUID|ThreadLocalRandom",
+    "uses_random": (re.compile(r"new Random|Math\.random|UUID\.randomUUID|ThreadLocalRandom"),
                     "depends on randomness"),
-    "uses_time": (r"System\.currentTimeMillis|System\.nanoTime|new Date\(|LocalDate\.now|LocalDateTime\.now|Instant\.now|Calendar\.getInstance",
+    "uses_time": (re.compile(r"System\.currentTimeMillis|System\.nanoTime|new Date\(|LocalDate\.now|LocalDateTime\.now|Instant\.now|Calendar\.getInstance"),
                   "depends on the current time"),
-    "uses_collections_order": (r"HashMap|HashSet|\.hashCode\(\)",
+    "uses_collections_order": (re.compile(r"HashMap|HashSet|\.hashCode\(\)"),
                                "relies on unordered collections or hash order"),
-    "uses_static_state": (r"static\s+(?!final)\w+[\w<>\[\], ]*\s+\w+\s*[=;]",
+    "uses_static_state": (re.compile(r"static\s+(?!final)\w+[\w<>\[\], ]*\s+\w+\s*[=;]"),
                           "mutable static (shared) state"),
-    "uses_timeout": (r"@Test\s*\(\s*timeout|@Timeout|assertTimeout",
+    "uses_timeout": (re.compile(r"@Test\s*\(\s*timeout|@Timeout|assertTimeout"),
                      "asserts on a timeout"),
 }
 
@@ -76,14 +76,17 @@ def extract_test_methods(java_source: str, filename: str = "<memory>") -> list[T
     return methods
 
 
+_ASSERT_PATTERN = re.compile(r"\bassert\w*\s*\(|\bverify\s*\(")
+_CONDITIONAL_PATTERN = re.compile(r"\b(if|for|while|switch)\s*\(")
+
+
 def compute_static_features(test: TestMethod) -> TestMethod:
     body = test.body
     test.features["testLength"] = float(body.count("\n") + 1)
-    test.features["numAsserts"] = float(len(re.findall(r"\bassert\w*\s*\(|\bverify\s*\(", body)))
-    test.features["conditional-test-logic"] = float(
-        bool(re.search(r"\b(if|for|while|switch)\s*\(", body)))
+    test.features["numAsserts"] = float(len(_ASSERT_PATTERN.findall(body)))
+    test.features["conditional-test-logic"] = float(bool(_CONDITIONAL_PATTERN.search(body)))
     for feat, (pattern, reason) in RISKY_APIS.items():
-        hit = bool(re.search(pattern, body))
+        hit = bool(pattern.search(body))
         test.features[feat] = float(hit)
         if hit:
             test.reasons.append(reason)
@@ -93,12 +96,9 @@ def compute_static_features(test: TestMethod) -> TestMethod:
 def scan_repo(root: Path) -> list[TestMethod]:
     """Extract features for every @Test method under root (test dirs first)."""
     tests: list[TestMethod] = []
-    candidates = sorted(root.rglob("*Test*.java")) + sorted(root.rglob("*Tests.java"))
-    seen: set[Path] = set()
-    for path in candidates:
-        if path in seen:
-            continue
-        seen.add(path)
+    # "*Tests.java" files are already matched by "*Test*.java" (substring), so a
+    # single rglob call covers both naming conventions with no duplicates.
+    for path in sorted(root.rglob("*Test*.java")):
         try:
             source = path.read_text(errors="replace")
         except OSError:
