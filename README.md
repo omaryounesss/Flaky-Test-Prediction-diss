@@ -41,8 +41,8 @@ Three findings:
 1. **Where the model knows the project, prediction works.** F1 0.73 pooled /
    0.61 per-project, and 96–99% of the fifty highest-ranked tests are
    genuinely flaky — a near-pure triage list. (Note: most prior work reports
-   the pooled protocol as "within-project"; the pooling alone is worth
-   ~0.12 F1.)
+   the pooled protocol as "within-project"; on matched projects the pooling
+   alone is worth ≈0.15 F1.)
 2. **On unseen projects, it collapses** — and the collapse is structured:
    logistic regression significantly beats random forest across held-out
    projects (Wilcoxon p = 0.004). High-capacity models memorize
@@ -115,7 +115,7 @@ honest framing above matters.
 src/flakeguard/       the package
   data.py             dataset loading, feature families
   modeling.py         imbalance-aware baselines (majority/logreg/RF/XGBoost)
-  evaluation.py       within-project CV + leave-one-project-out protocols
+  evaluation.py       mixed-, within-, and cross-project (LOPO) protocols
   vocab.py            token-vocabulary baseline
   explain.py          SHAP attributions -> human-readable risk reasons
   extract.py          static feature extraction from Java test source
