@@ -143,7 +143,7 @@ examples/             sample Java test file (make demo)
 
 ## Dataset & acknowledgements
 
-- **FlakeFlagger dataset:** Alshammari, Morris, Fazzini, Bell —
+- **FlakeFlagger dataset:** Alshammari, Morris, Hilton, Bell —
   *FlakeFlagger: Predicting Flakiness Without Rerunning Tests* (ICSE 2021).
   https://github.com/AlshammariA/FlakeFlagger
 - **IDoFT** (International Dataset of Flaky Tests):
